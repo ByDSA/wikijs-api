@@ -1,0 +1,43 @@
+{
+  "name": "wikijs-move",
+  "version": "1.0.0",
+  "description": "A wikijs recursive pages mover",
+  "author": "Daniel Sales Álvarez <danisales.es@gmail.com>",
+  "license": "ISC",
+  "scripts": {
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "prebuild": "npm run build:clean && npm rebuild",
+    "start": "node ./dist/index.js",
+    "build": "npm run build:clean && npm run build:raw",
+    "build:raw": "tsc",
+    "postbuild:raw": "tsc-alias -p tsconfig-build.json",
+    "build:clean": "rm -rf dist",
+    "prepublishOnly": "npm run lint:fix && npm run build",
+    "postpublish": "npm run build:clean",
+    "lint:eslint": "eslint ./src/*.ts",
+    "lint:fix": "eslint ./src/*.ts --fix"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "pg": "^8.7.3",
+    "typeorm": "^0.2.45"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.0.3",
+    "@types/pg": "^8.6.4",
+    "@typescript-eslint/eslint-plugin": "^5.13.0",
+    "@typescript-eslint/parser": "^5.13.0",
+    "eslint": "^8.4.1",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-import-resolver-typescript": "^2.5.0",
+    "eslint-plugin-import": "^2.25.3",
+    "eslint-plugin-jest": "^25.3.0",
+    "jest": "^27.5.1",
+    "ts-jest": "^27.1.3",
+    "tslib": "^2.3.1",
+    "typescript": "^4.6.2",
+    "tsc-alias": "^1.6.4"
+  }
+}

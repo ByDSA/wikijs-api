@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": ["**/*.spec.ts", "spec"],
+  "compilerOptions": {
+    "sourceMap": false,
+    "inlineSources": false
+  },
+  "tsc-alias": {
+    "verbose": false,
+    "resolveFullPaths": true
+  }
+}

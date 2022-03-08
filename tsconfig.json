@@ -1,0 +1,32 @@
+{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "strict": true,
+    "declaration": true,
+    "outDir": "./dist",
+    "sourceMap": true,
+    "inlineSources": true,
+    "downlevelIteration": true,
+    "experimentalDecorators": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "emitDecoratorMetadata": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "typeRoots": ["node_modules/@types"],
+    "lib": ["es2018", "dom"],
+    "paths": {
+      "#tests": ["../tests"],
+      "#tests/*": ["../tests/*"],
+      "#orm/*": ["../src/orm/*"]
+    },
+    "baseUrl": "./src/"
+  },
+  "include": ["src/**/*.ts"],
+  "files": ["src/index.ts"],
+  "exclude": ["dist", "node_modules"],
+  "filesGlob": ["src/**/*.ts", "tests/**/*.ts"],
+  "types": ["node"],
+  "typeRoots": ["../node_modules/@types"]
+}
