@@ -5,22 +5,72 @@ import PageTree from "../PageTree.entity";
 
 @EntityRepository(PageTree)
 export default class PageTreeRepository extends Repository<PageTree> {
-  async removeFoldersRecursivelyIfEmpty(to: string) {
+  async removeEmptySuperfolders(to: string) {
     const pageTree = await this.findByPath(to);
 
     if (!pageTree)
-      throw new Error(`Page tree with path "${to}" not found`);
+      return [];
 
-    const reversedAncestors = [...pageTree.ancestors, pageTree.id].reverse();
-
-    for (const ancestor of reversedAncestors) {
+    const reversedAncestors: number[] = [...pageTree.ancestors, pageTree.id].reverse();
+    const promises = reversedAncestors.map(async (ancestor: number, i) => {
       const pageTreesWithParent = await this.findByParentId(ancestor);
 
-      if (pageTreesWithParent.length > 0)
-        break;
+      if (pageTreesWithParent.length > 1)
+        return null;
 
-      await this.delete(ancestor);
+      if (pageTreesWithParent.length === 1
+        && pageTreesWithParent[0].id !== reversedAncestors[i - 1])
+        return null;
+
+      return ancestor;
+    } );
+    const emptyFolders: number[] = (await Promise.all(promises))
+      .filter((n) => n !== null) as number[];
+
+    if (emptyFolders.length === 0)
+      return [];
+
+    const query = this.createQueryBuilder()
+      .delete()
+      .from(PageTree)
+      .where("id IN (:...ids)", {
+        ids: emptyFolders,
+      } )
+      .returning("*");
+    const deleteResult = await query.execute();
+
+    return deleteResult.raw;
+  }
+
+  async existsSuperfoldersByPath(path: string) {
+    const pathSplit = path.split("/");
+    const length = pathSplit.length;
+    const promises = [];
+
+    for (let i = 0; i < length; i++) {
+      const fullSubPath = pathSplit.slice(0, length - i).join("/");
+      const promise = this.findByPath(fullSubPath);
+
+      promises.push(promise);
     }
+
+    const exists = (await Promise.all(promises))
+      .reduce((acc, n) => acc && !!n, true);
+
+    return exists;
+  }
+
+  async removeByPath(path: string) {
+    const result = await this.createQueryBuilder()
+      .delete()
+      .from(PageTree)
+      .where("path = :path", {
+        path,
+      } )
+      .returning("*")
+      .execute();
+
+    return result.raw[0];
   }
 
   async updateReplaceTree(oldPath: string, newPath: string) {
@@ -36,10 +86,15 @@ export default class PageTreeRepository extends Repository<PageTree> {
 
     const pageTreesToChange = await this.updateReplaceAllPathBeginning(oldPath, newPath);
 
-    return this.replaceAntecesorsAndParent(pageTreesToChange, oldPath, oldBaseTree, newBaseTree);
+    return this.replaceAntecesorsParentAndDepth(
+      pageTreesToChange,
+      oldPath,
+      oldBaseTree,
+      newBaseTree,
+    );
   }
 
-  private replaceAntecesorsAndParent(
+  private replaceAntecesorsParentAndDepth(
     pageTreesToChange: PageTree[],
     oldBasePath: string,
     oldBaseTree: PageTree,
@@ -56,6 +111,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
       ];
       // eslint-disable-next-line prefer-destructuring
       pageTree.parentId = pageTree.ancestors.slice(-1)[0];
+      pageTree.depth = pageTree.ancestors.length + 1;
 
       const p = this.save(pageTree);
 
@@ -77,7 +133,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
     ];
     const result = await this.query(queryStr, parameters);
 
-    return result.raw;
+    return result[0];
   }
 
   findByPath(path: string) {
@@ -86,6 +142,14 @@ export default class PageTreeRepository extends Repository<PageTree> {
         path,
       } )
       .getOne();
+  }
+
+  findByPathBeginning(pathBeginning: string) {
+    return this.createQueryBuilder("pageTree")
+      .where("pageTree.path like :pathBeginning", {
+        pathBeginning: `${pathBeginning}%`,
+      } )
+      .getMany();
   }
 
   findByParentId(parentId: number) {

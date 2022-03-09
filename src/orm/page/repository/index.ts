@@ -31,8 +31,11 @@ export default class PageRepository extends Repository<Page> {
       .execute();
   }
 
-  updateReplacePathBeginning(oldPathBeginning: string, newPathBeginning: string) {
-    return this.createQueryBuilder()
+  async updateReplacePathBeginning(
+    oldPathBeginning: string,
+    newPathBeginning: string,
+  ): Promise<Page[]> {
+    const result = await this.createQueryBuilder()
       .update(Page)
       .set( {
         path: () => `replace(path, '${oldPathBeginning}', '${newPathBeginning}')`,
@@ -41,5 +44,7 @@ export default class PageRepository extends Repository<Page> {
         path: `${oldPathBeginning}%`,
       } )
       .execute();
+
+    return result.raw;
   }
 }

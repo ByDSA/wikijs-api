@@ -6,6 +6,9 @@ import PageTree from "../PageTree.entity";
 
 let repo: Repository;
 let con: Connection;
+const nonExistingFolder = "nonExistingFolder";
+const nonExistingFolderFrom = "nonExistingFolderFrom";
+const nonExistingFolderTo = "nonExistingFolderTo";
 
 beforeAll(async () => {
   con = await connection;
@@ -16,67 +19,86 @@ afterAll(() => {
   con.close();
 } );
 
+async function checkSuperPathsExistence(path: string) {
+  const exists = await repo.existsSuperfoldersByPath(path);
+
+  expect(exists).toBeTruthy();
+}
+
 describe("find", () => {
   describe("ByPath", () => {
+    beforeAll(async () => {
+      await repo.insertFolderRecursively(nonExistingFolder);
+    } );
+
+    afterAll(async () => {
+      await repo.removeByPath(nonExistingFolder);
+    } );
+
     it("found", async () => {
-      const actual = await repo.findByPath("inf");
+      const actual = await repo.findByPath(nonExistingFolder);
 
       expect(actual).toBeDefined();
     } );
 
     it("not found", async () => {
-      const actual = await repo.findByPath("infdasdasd");
+      const actual = await repo.findByPath(`${nonExistingFolder}dasdasd`);
 
       expect(actual).toBeUndefined();
     } );
   } );
 } );
 
-function checkSubPathsExistence(path: string) {
-  const pathSplit = path.split("/");
-  const length = pathSplit.length;
-  const promises = [];
-
-  for (let i = 0; i < length; i++) {
-    const fullSubPath = pathSplit.slice(0, length - i).join("/");
-    const promise = repo.findByPath(fullSubPath);
-
-    promises.push(promise);
-    promise.then((pageTree) => {
-      expect(pageTree).toBeDefined();
-    } );
-  }
-
-  return Promise.all(promises);
-}
-
 describe("remove", () => {
+  describe("byPath", () => {
+    beforeAll(async () => {
+      await repo.insertFolderRecursively(nonExistingFolder);
+    } );
+
+    it("removed", async () => {
+      const actual = await repo.removeByPath(nonExistingFolder);
+
+      expect(actual).toBeDefined();
+    } );
+
+    it("not removed", async () => {
+      const actual = await repo.removeByPath(`${nonExistingFolder}asas`);
+
+      expect(actual).toBeUndefined();
+    } );
+  } );
+
   describe("removeFoldersRecursivelyIfEmpty", () => {
     it("test", async () => {
-      const path = "nonExistingFolder/1/3";
+      const innermostPath = `${nonExistingFolder}/1/3`;
 
-      await repo.insertFolderRecursively(path);
+      await repo.insertFolderRecursively(innermostPath);
 
-      await repo.removeFoldersRecursivelyIfEmpty(path);
+      const ret = await repo.removeEmptySuperfolders(innermostPath);
 
-      await checkSubPathsExistence(path);
+      expect(ret.length).toBe(3);
     } );
   } );
 } );
 
 describe("update", () => {
   describe("updateReplaceTree", () => {
-    const from = "nonExistingFolderFrom";
-    const fromFull = `${from}/3/4`;
-    const to = "nonExistingFolderTo/1/2";
+    const from = nonExistingFolderFrom;
+    const innermostFrom = `${from}/3/4`;
+    const to = `${nonExistingFolderTo}/1/2`;
+    const innermostTo = `${nonExistingFolderTo}/1/2/3/4`;
 
-    describe("found", () => {
+    describe("found From", () => {
       beforeAll(async () => {
-        await repo.insertFolderRecursively(fromFull);
+        await repo.insertFolderRecursively(innermostFrom);
       } );
 
       afterAll(async () => {
-        await repo.removeFoldersRecursivelyIfEmpty(to);
+        await repo.removeEmptySuperfolders(innermostTo);
+
+        await repo.removeEmptySuperfolders(innermostFrom);
+
+        await repo.removeByPath(from);
       } );
 
       describe("onlyFolders", () => {
@@ -84,19 +106,28 @@ describe("update", () => {
         const newPageTrees: PageTree[] = [];
 
         beforeAll(async () => {
-          const fromPageTree = await repo.findByPath(from) as PageTree;
+          const fromPageTree = await repo.findByPath(innermostFrom) as PageTree;
 
           ancestors.push(...fromPageTree.ancestors, fromPageTree.id);
+          ancestors.splice(0, 1);
           newPageTrees.push(...await repo.updateReplaceTree(from, to));
         } );
 
-        it("new folders exist", async () => {
-          await checkSubPathsExistence(to);
+        it("exists all new folder tree", async () => {
+          await checkSuperPathsExistence(innermostTo);
         } );
 
-        it("same as from folders", () => {
+        it("moved pageTree are the same as old", () => {
           newPageTrees.forEach((newPageTree, i) => {
             expect(newPageTree.id).toBe(ancestors[i]);
+          } );
+        } );
+
+        it("correct depth", async () => {
+          const pageTrees = await repo.findByPathBeginning(nonExistingFolderTo);
+
+          pageTrees.forEach((pageTree) => {
+            expect(pageTree.depth).toBe(pageTree.path.split("/").length);
           } );
         } );
       } );
@@ -148,13 +179,13 @@ describe("update", () => {
       const path = "asdasd";
 
       afterAll(async () => {
-        await repo.removeFoldersRecursivelyIfEmpty(path);
+        await repo.removeEmptySuperfolders(path);
       } );
 
       it("test", async () => {
         await repo.insertFolderRecursively(path);
 
-        await checkSubPathsExistence(path);
+        await checkSuperPathsExistence(path);
       } );
     } );
 
@@ -164,7 +195,7 @@ describe("update", () => {
       const pathFolder = `${pathParentFolder1}/sub2`;
 
       afterAll(async () => {
-        await repo.removeFoldersRecursivelyIfEmpty(pathFolder);
+        await repo.removeEmptySuperfolders(pathFolder);
       } );
 
       it("test", async () => {
@@ -172,15 +203,15 @@ describe("update", () => {
 
         expect(folders.length).toBe(3);
 
-        await checkSubPathsExistence(pathFolder);
+        await checkSuperPathsExistence(pathFolder);
       } );
     } );
   } );
 
   describe("updateReplaceAllPathBeginning", () => {
-    describe("single folder", () => {
-      const oldPath = "nonExistingFolderFrom";
-      const newPath = "nonExistingFolderTo";
+    describe("single folder. destination folder doesn't exist previously", () => {
+      const oldPath = nonExistingFolderFrom;
+      const newPath = nonExistingFolderTo;
 
       beforeAll(async () => {
         await repo.insertFolderRecursively(oldPath);
@@ -188,16 +219,8 @@ describe("update", () => {
       } );
 
       afterAll(async () => {
-        try {
-          await repo.removeFoldersRecursivelyIfEmpty(oldPath);
-        } catch (e) {
-          // ignore
-        }
-        try {
-          await repo.removeFoldersRecursivelyIfEmpty(newPath);
-        } catch (e) {
-          // ignore
-        }
+        await repo.removeEmptySuperfolders(oldPath);
+        await repo.removeEmptySuperfolders(newPath);
       } );
 
       it("old path doesn't exist anymore", async () => {
@@ -213,38 +236,22 @@ describe("update", () => {
     } );
 
     describe("tree folder", () => {
-      const oldPath = "nonExistingFolderFrom";
-      const fullOldPath = `${oldPath}/3/4`;
-      const newPath = "nonExistingFolderTo/1/2";
-      const fullRenamedPath = `${newPath}/3/4`;
+      const oldPath = nonExistingFolderFrom;
+      const innermostOldPath = `${oldPath}/3/4`;
+      const newPath = `${nonExistingFolderTo}/1/2`;
+      const innermostRenamedPath = `${newPath}/3/4`;
 
       beforeAll(async () => {
-        await repo.insertFolderRecursively(fullOldPath);
+        await repo.insertFolderRecursively(innermostOldPath);
         await repo.insertFolderRecursively(newPath);
         await repo.updateReplaceAllPathBeginning(oldPath, newPath);
       } );
 
       afterAll(async () => {
-        try {
-          await repo.removeFoldersRecursivelyIfEmpty(fullOldPath);
-        } catch (e) {
-          // ignore
-        }
-        try {
-          await repo.removeFoldersRecursivelyIfEmpty(oldPath);
-        } catch (e) {
-          // ignore
-        }
-        try {
-          await repo.removeFoldersRecursivelyIfEmpty(fullRenamedPath);
-        } catch (e) {
-          // ignore
-        }
-        try {
-          await repo.removeFoldersRecursivelyIfEmpty(newPath);
-        } catch (e) {
-          // ignore
-        }
+        await repo.removeEmptySuperfolders(innermostOldPath);
+        await repo.removeEmptySuperfolders(oldPath);
+        await repo.removeEmptySuperfolders(innermostRenamedPath);
+        await repo.removeEmptySuperfolders(newPath);
       } );
 
       describe("old paths don't exist anymore, but base", () => {
@@ -269,19 +276,19 @@ describe("update", () => {
 
       describe("new paths exist", () => {
         it("nonExistingFolderTo", async () => {
-          const newPageTree = await repo.findByPath("nonExistingFolderTo");
+          const newPageTree = await repo.findByPath(nonExistingFolderTo);
 
           expect(newPageTree).toBeDefined();
         } );
 
         it("nonExistingFolderTo/1", async () => {
-          const newPageTree = await repo.findByPath("nonExistingFolderTo/1");
+          const newPageTree = await repo.findByPath(`${nonExistingFolderTo}/1`);
 
           expect(newPageTree).toBeDefined();
         } );
 
         it("nonExistingFolderTo/1/2", async () => {
-          const newPageTree = await repo.findByPath("nonExistingFolderTo/1/2");
+          const newPageTree = await repo.findByPath(`${nonExistingFolderTo}/1/2`);
 
           expect(newPageTree).toBeDefined();
         } );
