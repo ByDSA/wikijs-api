@@ -83,5 +83,5 @@ export default class User {
     dateFormat!: string;
 
   @Column()
-    appearence!: string;
+    appearance!: string;
 }

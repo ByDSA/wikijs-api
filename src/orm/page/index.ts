@@ -5,3 +5,5 @@ export {
 export {
   default as PageRepository,
 } from "./repository";
+
+export * from "./utils";

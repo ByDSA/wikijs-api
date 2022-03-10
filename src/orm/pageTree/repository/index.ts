@@ -1,11 +1,44 @@
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-await-in-loop */
+import { fetchDefaultLangFromSettings } from "orm/global";
 import { EntityRepository, Repository } from "typeorm";
 import PageTree from "../PageTree.entity";
 
+type CreateOptions = {
+  pageId?: number;
+  localeCode?: string;
+  title?: string;
+ };
+
+export {
+  CreateOptions as CreatePageTreeOptions,
+};
+
 @EntityRepository(PageTree)
 export default class PageTreeRepository extends Repository<PageTree> {
-  async removeEmptySuperfolders(to: string) {
+  async createAndSave(pageTree: Partial<PageTree>) {
+    if (!pageTree.path)
+      throw new Error("Path is required");
+
+    const entity = {
+      ...pageTree,
+    };
+
+    entity.depth ??= pageTree.path.split("/").length;
+    entity.title ??= "";
+
+    entity.isFolder = !(typeof pageTree.pageId === "number");
+
+    entity.localeCode ??= await fetchDefaultLangFromSettings();
+
+    entity.id ??= await this.generateId();
+
+    entity.ancestors ??= [];
+
+    return this.save(entity);
+  }
+
+  async deleteEmptySuperfolders(to: string) {
     const pageTree = await this.findByPath(to);
 
     if (!pageTree)
@@ -60,7 +93,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
     return exists;
   }
 
-  async removeByPath(path: string) {
+  async deleteByPath(path: string) {
     const result = await this.createQueryBuilder()
       .delete()
       .from(PageTree)
@@ -81,8 +114,18 @@ export default class PageTreeRepository extends Repository<PageTree> {
     if (!oldBaseTree)
       throw new Error(`Old base path "${oldPath}" not found`);
 
-    if (!newBaseTree)
-      newBaseTree = (await this.insertFolderRecursively(newPath)).slice(-1)[0];
+    const newPathDepth = newPath.split("/").length;
+
+    if (!newBaseTree && newPathDepth > 1) {
+      if (oldBaseTree.isFolder)
+        newBaseTree = (await this.insertFolderRecursively(newPath)).slice(-1)[0];
+      else {
+        const newBaseTreeParentPath = newPath.split("/").slice(0, -1)
+          .join("/");
+
+        newBaseTree = (await this.insertFolderRecursively(newBaseTreeParentPath)).slice(-1)[0];
+      }
+    }
 
     const pageTreesToChange = await this.updateReplaceAllPathBeginning(oldPath, newPath);
 
@@ -98,10 +141,10 @@ export default class PageTreeRepository extends Repository<PageTree> {
     pageTreesToChange: PageTree[],
     oldBasePath: string,
     oldBaseTree: PageTree,
-    newBaseTree: PageTree,
+    newBaseTree: PageTree | undefined,
   ) {
     const antecesorsBaseOld = [...oldBaseTree.ancestors, oldBaseTree.id];
-    const antecesorsBaseNew = [...newBaseTree.ancestors, newBaseTree.id];
+    const antecesorsBaseNew = newBaseTree ? [...newBaseTree.ancestors, newBaseTree.id] : [];
     const promises = [];
 
     for (const pageTree of pageTreesToChange) {
@@ -140,6 +183,14 @@ export default class PageTreeRepository extends Repository<PageTree> {
     return this.createQueryBuilder("pageTree")
       .where("pageTree.path = :path", {
         path,
+      } )
+      .getOne();
+  }
+
+  findByPageId(pageId: number) {
+    return this.createQueryBuilder("pageTree")
+      .where("pageTree.pageId = :pageId", {
+        pageId,
       } )
       .getOne();
   }
@@ -203,16 +254,13 @@ export default class PageTreeRepository extends Repository<PageTree> {
     const ret: PageTree[] = [];
 
     if (depth > 1) {
-      for (let i = 0; i < depth - 1; i++) {
-        const ancestorPath = splittedPath.slice(0, i + 1).join("/");
-        let ancestorPageTree = await this.findByPath(ancestorPath);
+      const superFolders = await this.createSuperFolders(path);
+      const last = superFolders.at(-1);
 
-        if (!ancestorPageTree)
-          ancestorPageTree = await this.insertFolder(ancestorPath, parent);
+      if (!last)
+        throw new Error("No last superfolder");
 
-        parent = ancestorPageTree;
-        ret.push(parent);
-      }
+      parent = last;
     }
 
     const pageTree = new PageTree();
@@ -234,5 +282,25 @@ export default class PageTreeRepository extends Repository<PageTree> {
     ret.push(savedPageTree);
 
     return ret;
+  }
+
+  async createSuperFolders(path: string) {
+    const folders = [];
+    const splittedPath = path.split("/");
+    const depth = splittedPath.length;
+    let parent: PageTree | null = null;
+
+    for (let i = 0; i < depth - 1; i++) {
+      const ancestorPath = splittedPath.slice(0, i + 1).join("/");
+      let ancestorPageTree = await this.findByPath(ancestorPath);
+
+      if (!ancestorPageTree)
+        ancestorPageTree = await this.insertFolder(ancestorPath, parent);
+
+      parent = ancestorPageTree;
+      folders.push(parent);
+    }
+
+    return folders;
   }
 }

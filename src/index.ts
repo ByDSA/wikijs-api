@@ -12,7 +12,7 @@ async function main() {
 
   console.log(res);
 
-  const res3 = await pageTreeRepo.updateReplaceTree(from, to);
+  const res3 = await pageTreeRepo.replaceSuperTree(from, to);
   const res2 = await pageRepo.updateReplaceInContent(`(/${from}`, `(/${to}`);
 
   console.log(res2);

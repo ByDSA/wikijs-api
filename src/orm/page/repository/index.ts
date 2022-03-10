@@ -1,8 +1,23 @@
+/* eslint-disable no-param-reassign */
 import { EntityRepository, Repository } from "typeorm";
 import Page from "../Page.entity";
+import { fillWithDefaultValues } from "../utils";
 
 @EntityRepository(Page)
 export default class PageRepository extends Repository<Page> {
+  async deleteByPath(path: string) {
+    const result = await this.createQueryBuilder()
+      .delete()
+      .from(Page)
+      .where("path = :path", {
+        path,
+      } )
+      .returning("*")
+      .execute();
+
+    return result.raw[0] as Page;
+  }
+
   findByPathBeginning(pathBeginning: string) {
     return this.createQueryBuilder("page")
       .where("page.path like :path", {
@@ -46,5 +61,16 @@ export default class PageRepository extends Repository<Page> {
       .execute();
 
     return result.raw;
+  }
+
+  async createAndSave(page: Partial<Page>) {
+    if (!page.path)
+      throw new Error("Path is required");
+
+    const newEntity = await fillWithDefaultValues( {
+      ...page,
+    } );
+
+    return this.save(newEntity);
   }
 }
