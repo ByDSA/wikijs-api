@@ -49,15 +49,15 @@ describe("movePageRecursively", () => {
 
       describe("old ones don't exist anymore", () => {
         it("page", async () => {
-          const page = await pageRepo.findByPathBeginning(nonExistingPageFrom);
+          const pages = await pageRepo.findByPathBeginning(nonExistingPageFrom);
 
-          expect(page).toBeUndefined();
+          expect(pages.length).toBe(0);
         } );
 
         it("pageTree", async () => {
-          const pageTree = await pageTreeRepo.findByPathBeginning(nonExistingPageFrom);
+          const pageTrees = await pageTreeRepo.findByPathBeginning(nonExistingPageFrom);
 
-          expect(pageTree).toBeUndefined();
+          expect(pageTrees.length).toBe(0);
         } );
       } );
 

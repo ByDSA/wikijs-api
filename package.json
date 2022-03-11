@@ -1,7 +1,7 @@
 {
-  "name": "wikijs-move",
+  "name": "wikijs-api",
   "version": "1.0.0",
-  "description": "A wikijs recursive pages mover",
+  "description": "A wikijs API",
   "author": "Daniel Sales Álvarez <danisales.es@gmail.com>",
   "license": "ISC",
   "scripts": {
@@ -14,15 +14,19 @@
     "build:raw": "tsc",
     "postbuild:raw": "tsc-alias -p tsconfig-build.json",
     "build:clean": "rm -rf dist",
+    "build:install": "sudo zx ./scripts/install.mjs",
     "prepublishOnly": "npm run lint:fix && npm run build",
     "postpublish": "npm run build:clean",
     "lint:eslint": "eslint ./src/*.ts",
     "lint:fix": "eslint ./src/*.ts --fix"
   },
   "dependencies": {
+    "@types/yargs": "^17.0.9",
+    "chalk": "4.1.2",
     "dotenv": "^16.0.0",
     "pg": "^8.7.3",
-    "typeorm": "^0.2.45"
+    "typeorm": "^0.2.45",
+    "yargs": "^17.3.1"
   },
   "devDependencies": {
     "@types/jest": "^27.0.3",
@@ -36,8 +40,8 @@
     "eslint-plugin-jest": "^25.3.0",
     "jest": "^27.5.1",
     "ts-jest": "^27.1.3",
+    "tsc-alias": "^1.6.4",
     "tslib": "^2.3.1",
-    "typescript": "^4.6.2",
-    "tsc-alias": "^1.6.4"
+    "typescript": "^4.6.2"
   }
 }

@@ -23,4 +23,5 @@ module.exports = {
   moduleNameMapper: {
     "^#tests($|/.*)$": "<rootDir>/tests/$1",
   },
+  testTimeout: 9999 * 1000,
 };

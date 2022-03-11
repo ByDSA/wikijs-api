@@ -55,11 +55,30 @@ class Process {
   }
 
   moveSubPageTreesRecursively() {
-    return this.pageTreesRepo.updateReplaceTree(this.oldPath, this.newPath);
+    return this.pageTreesRepo.moveTree(this.oldPath, this.newPath);
   }
 
-  moveSubPagesRecursively() {
-    return this.pagesRepo.updateReplacePathBeginning(this.oldPath, this.newPath);
+  async moveSubPagesRecursively() {
+    const pageIdsToMove = this.movedPageTrees.reduce((acc, pageTree) => {
+      const { pageId } = pageTree;
+
+      if (pageId)
+        acc.push(pageId);
+
+      return acc;
+    }, [] as number[]);
+    const pagesToMove = await this.pagesRepo.findByIds(pageIdsToMove);
+    const movedPages = pagesToMove.map((page) => {
+      const updatedPage = {
+        ...page,
+      };
+
+      updatedPage.path = page.path.replace(this.oldPath, this.newPath);
+
+      return this.pagesRepo.save(updatedPage);
+    } );
+
+    return Promise.all(movedPages);
   }
 
   async saveOldRootPageTree() {

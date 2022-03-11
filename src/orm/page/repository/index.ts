@@ -26,6 +26,14 @@ export default class PageRepository extends Repository<Page> {
       .getMany();
   }
 
+  findByIds(ids: number[]) {
+    return this.createQueryBuilder()
+      .where("id IN (:...ids)", {
+        ids,
+      } )
+      .getMany();
+  }
+
   findInContent(content: string) {
     return this.createQueryBuilder("page")
       .where("page.content like :content", {
