@@ -5,6 +5,7 @@ import { PATH_EXCEPTION } from "orm/utils/exceptions";
 import { Connection } from "typeorm";
 import Repository from ".";
 import PageTree from "../PageTree.entity";
+import { deleteEmptyFolderAndSuperfolders, updateReplaceAllPathBeginning } from "./moveTree";
 
 let repo: Repository;
 let con: Connection;
@@ -32,22 +33,19 @@ describe("private", () => {
   type RepoPrivate = {
     existsSuperfoldersByPath: (path: string)=> Promise<boolean>;
     insertSuperFoldersIfNotExist: (path: string)=> Promise<PageTree[]>;
-    deleteEmptySuperfolders: (path: string)=> Promise<PageTree[]>;
-    updateReplaceAllPathBeginning: (path: string, newPath: string)=> Promise<PageTree[]>;
   };
   let repoAny: RepoPrivate;
 
   beforeAll(() => {
     repoAny = (repo as any as RepoPrivate);
   } );
-
   describe("removeFoldersRecursivelyIfEmpty", () => {
     it("test", async () => {
       const innermostPath = `${nonExistingFolderPath}/1/3`;
 
       await repo.insertFolder(innermostPath);
 
-      const ret = await repoAny.deleteEmptySuperfolders(innermostPath);
+      const ret = await deleteEmptyFolderAndSuperfolders(repo, innermostPath);
 
       expect(ret.length).toBe(3);
     } );
@@ -171,7 +169,7 @@ describe("private", () => {
 
       beforeAll(async () => {
         await repo.insertFolder(oldPath);
-        await repoAny.updateReplaceAllPathBeginning(oldPath, newPath);
+        await updateReplaceAllPathBeginning(repo, oldPath, newPath);
       } );
 
       afterAll(async () => {
@@ -199,7 +197,7 @@ describe("private", () => {
       beforeAll(async () => {
         await repo.insertFolder(innermostOldPath);
         await repo.insertFolder(newPath);
-        await repoAny.updateReplaceAllPathBeginning(oldPath, newPath);
+        await updateReplaceAllPathBeginning(repo, oldPath, newPath);
       } );
 
       afterAll(async () => {
@@ -491,7 +489,7 @@ describe("createAndSave", () => {
 
   it("no path", async () => {
     const pageTree = {
-    };
+    } as any;
     const t = async () => {
       await repo.createAndSave(pageTree);
     };
@@ -525,7 +523,7 @@ describe("createAndSave", () => {
     it("title", () => {
       const actual = createdPageTree.title;
 
-      expect(actual).toBe("");
+      expect(actual).toBe("nonExistingPageTree");
     } );
 
     it("isPrivate", () => {

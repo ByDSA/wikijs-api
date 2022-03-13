@@ -11,8 +11,8 @@
     "prebuild": "npm run build:clean && npm rebuild",
     "start": "node ./dist/index.js",
     "build": "npm run build:clean && npm run build:raw",
-    "build:raw": "tsc",
-    "postbuild:raw": "tsc-alias -p tsconfig-build.json",
+    "buildAndInstall": "npm run build && npm run build:install",
+    "build:raw": "tsc -p tsconfig-build.json",
     "build:clean": "rm -rf dist",
     "build:install": "sudo zx ./scripts/install.mjs",
     "prepublishOnly": "npm run lint:fix && npm run build",
@@ -40,7 +40,6 @@
     "eslint-plugin-jest": "^25.3.0",
     "jest": "^27.5.1",
     "ts-jest": "^27.1.3",
-    "tsc-alias": "^1.6.4",
     "tslib": "^2.3.1",
     "typescript": "^4.6.2"
   }

@@ -1,6 +1,6 @@
-import { Page, PageRepository } from "orm/page";
-import { PageTree, PageTreeRepository } from "orm/pageTree";
 import { Connection, getCustomRepository } from "typeorm";
+import { Page, PageRepository } from "../page";
+import { PageTree, PageTreeRepository } from "../pageTree";
 
 type ReturnType = {
   pages: Page[];
@@ -43,8 +43,8 @@ class Process {
     this.pagesRepo = getCustomRepository(PageRepository);
     this.pageTreesRepo = getCustomRepository(PageTreeRepository);
 
-    this.movedPageTrees = await this.moveSubPageTreesRecursively();
-    this.movedPages = await this.moveSubPagesRecursively();
+    this.movedPageTrees = await this.movePageTreesRecursively();
+    this.movedPages = await this.movePagesRecursively();
 
     // await this.manageOldRootPageAndOldRootPageTree();
 
@@ -54,11 +54,11 @@ class Process {
     };
   }
 
-  moveSubPageTreesRecursively() {
+  movePageTreesRecursively() {
     return this.pageTreesRepo.moveTree(this.oldPath, this.newPath);
   }
 
-  async moveSubPagesRecursively() {
+  async movePagesRecursively() {
     const pageIdsToMove = this.movedPageTrees.reduce((acc, pageTree) => {
       const { pageId } = pageTree;
 
@@ -73,7 +73,10 @@ class Process {
         ...page,
       };
 
-      updatedPage.path = page.path.replace(this.oldPath, this.newPath);
+      if (page.path === this.oldPath)
+        updatedPage.path = this.newPath;
+      else
+        updatedPage.path = page.path.replace(`${this.oldPath}/`, `${this.newPath}/`);
 
       return this.pagesRepo.save(updatedPage);
     } );

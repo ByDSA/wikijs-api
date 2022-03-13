@@ -1,7 +1,7 @@
-import { Page, PageRepository } from "orm/page";
-import { PageTree, PageTreeRepository } from "orm/pageTree";
-import { getParentPath } from "orm/utils";
 import { getCustomRepository } from "typeorm";
+import { Page, PageRepository } from "../page";
+import { PageTree, PageTreeRepository } from "../pageTree";
+import { getParentPath } from "../utils";
 
 type ReturnType = {
   page: Page;

@@ -4,9 +4,5 @@
   "compilerOptions": {
     "sourceMap": false,
     "inlineSources": false
-  },
-  "tsc-alias": {
-    "verbose": false,
-    "resolveFullPaths": true
   }
 }

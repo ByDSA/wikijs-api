@@ -1,8 +1,8 @@
 /* eslint-disable no-param-reassign */
 import crypto from "crypto";
-import { fetchDefaultLangFromSettings } from "orm/global";
-import { UserRepository } from "orm/user";
 import { getCustomRepository } from "typeorm";
+import { fetchDefaultLangFromSettings } from "../global";
+import { UserRepository } from "../user";
 import Page from "./Page.entity";
 
 export async function fillWithDefaultValues(page: Partial<Page>) {

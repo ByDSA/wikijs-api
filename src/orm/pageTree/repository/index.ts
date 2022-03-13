@@ -1,39 +1,44 @@
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-await-in-loop */
-import { fetchDefaultLangFromSettings } from "orm/global";
-import { PageRepository } from "orm/page";
-import { getParentPath, getSuperpaths, PATH_EXCEPTION } from "orm/utils";
 import { EntityRepository, getCustomRepository, Repository } from "typeorm";
+import { fetchDefaultLangFromSettings } from "../../global";
+import { PageRepository } from "../../page";
+import { getParentPath, getSuperpaths, PATH_EXCEPTION } from "../../utils";
 import PageTree from "../PageTree.entity";
+// eslint-disable-next-line import/no-cycle
+import moveTreeProcess from "./moveTree";
 
-type CreateOptions = {
-  pageId?: number;
-  localeCode?: string;
-  title?: string;
- };
-
-export {
-  CreateOptions as CreatePageTreeOptions,
+type PartialPageTreeWithPath = Partial<PageTree> & {
+  path: string;
 };
 
+type CreateAndSaveOptions = {
+  parent?: PageTree | null;
+};
 @EntityRepository(PageTree)
 export default class PageTreeRepository extends Repository<PageTree> {
-  async createAndSave(pageTree: Partial<PageTree>) {
+  async createAndSave(pageTree: PartialPageTreeWithPath, options?: CreateAndSaveOptions) {
     if (!pageTree.path)
       throw PATH_EXCEPTION;
 
     const entity = {
       ...pageTree,
     };
+    const splittedPath = pageTree.path.split("/");
 
-    entity.depth ??= pageTree.path.split("/").length;
-    entity.title ??= "";
+    entity.depth ??= splittedPath.length;
+    entity.title ??= splittedPath.slice(-1)[0];
 
     entity.isFolder = !(typeof pageTree.pageId === "number");
 
     entity.localeCode ??= await fetchDefaultLangFromSettings();
 
-    const parent: PageTree | null = await this.getOrCreateParent(pageTree);
+    const parent: PageTree | null = options?.parent !== undefined
+      ? options.parent
+      : await this.getOrCreateParent(pageTree);
+
+    if (entity.depth > 1 && !parent)
+      throw new Error("No parent with depth path greater than 0.");
 
     entity.parentId = parent?.id ?? null;
 
@@ -66,43 +71,6 @@ export default class PageTreeRepository extends Repository<PageTree> {
     parent = folders.at(-1) ?? null;
 
     return parent;
-  }
-
-  private async deleteEmptySuperfolders(to: string) {
-    const pageTree = await this.findByPath(to);
-
-    if (!pageTree)
-      return [];
-
-    const reversedAncestors: number[] = [...pageTree.ancestors, pageTree.id].reverse();
-    const promises = reversedAncestors.map(async (ancestor: number, i) => {
-      const pageTreesWithParent = await this.findByParentId(ancestor);
-
-      if (pageTreesWithParent.length > 1)
-        return null;
-
-      if (pageTreesWithParent.length === 1
-        && pageTreesWithParent[0].id !== reversedAncestors[i - 1])
-        return null;
-
-      return ancestor;
-    } );
-    const emptyFolders: number[] = (await Promise.all(promises))
-      .filter((n) => n !== null) as number[];
-
-    if (emptyFolders.length === 0)
-      return [];
-
-    const query = this.createQueryBuilder()
-      .delete()
-      .from(PageTree)
-      .where("id IN (:...ids)", {
-        ids: emptyFolders,
-      } )
-      .returning("*");
-    const deleteResult = await query.execute();
-
-    return deleteResult.raw;
   }
 
   async existsSuperfoldersByPath(path: string) {
@@ -165,35 +133,8 @@ export default class PageTreeRepository extends Repository<PageTree> {
     return deletedPageTrees;
   }
 
-  async moveTree(oldPath: string, newPath: string) {
-    const oldBaseTree: PageTree | undefined = await this.findByPath(oldPath);
-    let newBaseTree: PageTree | undefined = await this.findByPath(newPath);
-    // TODO: qué pasa si origen-destino son el mismo o el destino está contenido en el origen.
-
-    if (!oldBaseTree)
-      throw new Error(`Old base path "${oldPath}" not found`);
-
-    const newPathDepth = newPath.split("/").length;
-
-    if (!newBaseTree && newPathDepth > 1) {
-      if (oldBaseTree.isFolder)
-        newBaseTree = (await this.insertFolder(newPath)).slice(-1)[0];
-      else {
-        const newBaseTreeParentPath = newPath.split("/").slice(0, -1)
-          .join("/");
-
-        newBaseTree = (await this.insertFolder(newBaseTreeParentPath)).slice(-1)[0];
-      }
-    }
-
-    const pageTreesToChange = await this.updateReplaceAllPathBeginning(oldPath, newPath);
-
-    return this.replaceAntecesorsParentAndDepth(
-      pageTreesToChange,
-      oldPath,
-      oldBaseTree,
-      newBaseTree,
-    );
+  moveTree(oldPath: string, newPath: string) {
+    return moveTreeProcess(this, oldPath, newPath);
   }
 
   async fixAll() {
@@ -230,48 +171,6 @@ export default class PageTreeRepository extends Repository<PageTree> {
     return createdPageTrees;
   }
 
-  private replaceAntecesorsParentAndDepth(
-    pageTreesToChange: PageTree[],
-    oldBasePath: string,
-    oldBaseTree: PageTree,
-    newBaseTree: PageTree | undefined,
-  ) {
-    const antecesorsBaseOld = [...oldBaseTree.ancestors, oldBaseTree.id];
-    const antecesorsBaseNew = newBaseTree ? [...newBaseTree.ancestors, newBaseTree.id] : [];
-    const promises = [];
-
-    for (const pageTree of pageTreesToChange) {
-      pageTree.ancestors = [
-        ...antecesorsBaseNew,
-        ...pageTree.ancestors.slice(antecesorsBaseOld.length),
-      ];
-      // eslint-disable-next-line prefer-destructuring
-      pageTree.parentId = pageTree.ancestors.slice(-1)[0];
-      pageTree.depth = pageTree.ancestors.length + 1;
-
-      const p = this.save(pageTree);
-
-      promises.push(p);
-    }
-
-    return Promise.all(promises);
-  }
-
-  private async updateReplaceAllPathBeginning(
-    oldPathBeginning: string,
-    newPathBeginning: string,
-  ): Promise<PageTree[]> {
-    const queryStr = "UPDATE \"pageTree\" pt SET path = replace(path, $1, $2) WHERE path like $3 AND not exists (select * from \"pageTree\" p where p.path = replace(pt.path, $1, $2)) RETURNING *";
-    const parameters = [
-      oldPathBeginning,
-      newPathBeginning,
-      `${oldPathBeginning}%`,
-    ];
-    const result = await this.query(queryStr, parameters);
-
-    return result[0];
-  }
-
   findByPath(path: string) {
     return this.createQueryBuilder("pageTree")
       .where("pageTree.path = :path", {
@@ -304,32 +203,17 @@ export default class PageTreeRepository extends Repository<PageTree> {
       .getMany();
   }
 
-  private async insertOneAsFolder(path: string, parent: PageTree | null): Promise<PageTree> {
-    const splittedPath = path.split("/");
-    const depth = splittedPath.length;
-    const title = splittedPath.slice(-1)[0];
-    const isFolder = true;
-    let parentId: number | null = null;
-    let ancestors: number[] = [];
-
-    if (parent) {
-      ancestors = [...parent.ancestors, parent.id];
-      parentId = parent.id;
-    } else if (depth > 1)
-      throw new Error("No parent provided with depth path greater than 0.");
-
-    const id = await this.generateId();
+  private async insertOneAsFolder(
+    reference: PartialPageTreeWithPath,
+    parent: PageTree | null,
+  ): Promise<PageTree> {
     const pageTree = {
-      id,
-      path,
-      depth,
-      title,
-      isFolder,
-      parentId,
-      ancestors,
-      localeCode: "es",
+      ...reference,
+      isFolder: true,
     };
-    const ret = await this.save(pageTree);
+    const ret = await this.createAndSave(pageTree, {
+      parent,
+    } );
 
     return ret;
   }
@@ -347,16 +231,15 @@ export default class PageTreeRepository extends Repository<PageTree> {
     return last.id + 1;
   }
 
-  async insertFolder(path: string) {
+  async insertFolder(path: string, reference?: Partial<PageTree>) {
     const splittedPath = path.split("/");
     const depth = splittedPath.length;
-    const title = splittedPath.slice(-1)[0];
     const isFolder = true;
     let parent: PageTree | null = null;
     const ret: PageTree[] = [];
 
     if (depth > 1) {
-      const insertedSuperFolders = await this.insertSuperFoldersIfNotExist(path);
+      const insertedSuperFolders = await this.insertSuperFoldersIfNotExist(path, reference);
 
       ret.push(...insertedSuperFolders);
       const lastInserted = insertedSuperFolders.at(-1);
@@ -365,28 +248,24 @@ export default class PageTreeRepository extends Repository<PageTree> {
       parent = lastInserted ?? await this.findByPath(parentPath) ?? null;
     }
 
-    const pageTree = new PageTree();
+    const pageTree: PartialPageTreeWithPath = {
+      ...removeNoMetadata(reference),
+      path,
+      depth,
+      isFolder,
+    };
 
     pageTree.id = await this.generateId();
-    pageTree.path = path;
-    pageTree.depth = depth;
-    pageTree.title = title;
-    pageTree.isFolder = isFolder;
-
-    if (parent) {
-      pageTree.ancestors = [...parent.ancestors, parent.id];
-      pageTree.parentId = parent.id;
-    } else
-      pageTree.ancestors = [];
-
-    const savedPageTree = await this.save(pageTree);
+    const savedPageTree = await this.createAndSave(pageTree, {
+      parent,
+    } );
 
     ret.push(savedPageTree);
 
     return ret;
   }
 
-  private async insertSuperFoldersIfNotExist(path: string) {
+  private async insertSuperFoldersIfNotExist(path: string, reference?: Partial<PageTree>) {
     const folders = [];
     const superPaths = getSuperpaths(path);
     let parentFolder: PageTree | null = null;
@@ -396,7 +275,13 @@ export default class PageTreeRepository extends Repository<PageTree> {
       let created = false;
 
       if (!folder) {
-        folder = await this.insertOneAsFolder(p, parentFolder);
+        const newPageTree = {
+          ...removeNoMetadata(reference),
+          path: p,
+          isFolder: true,
+        };
+
+        folder = await this.insertOneAsFolder(newPageTree, parentFolder);
 
         if (folder)
           created = true;
@@ -410,4 +295,27 @@ export default class PageTreeRepository extends Repository<PageTree> {
 
     return folders;
   }
+}
+
+function removeNoMetadata(pageTree: Partial<PageTree> | undefined) {
+  if (!pageTree)
+    return pageTree;
+
+  const { isPrivate,
+    privateNS,
+    localeCode } = pageTree;
+
+  return {
+    id: undefined,
+    path: undefined,
+    depth: undefined,
+    isFolder: undefined,
+    pageId: undefined,
+    ancestors: undefined,
+    parentId: undefined,
+    title: undefined,
+    localeCode,
+    isPrivate,
+    privateNS,
+  };
 }

@@ -3,13 +3,13 @@ import yargs from "yargs";
 import defaultCmd from "./default";
 import movePagesCmd from "./move-pages";
 
-function processParams() {
-  defaultCmd();
-  movePagesCmd();
+async function processParams() {
+  await defaultCmd();
+  await movePagesCmd();
 
-  yargs.parse();
+  await yargs.parse();
 }
 
-processParams();
-
-console.log(chalk.green("Done!"));
+processParams().then(() => {
+  console.log(chalk.green("Done!"));
+} );

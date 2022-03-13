@@ -18,13 +18,11 @@
     "lib": ["es2018", "dom"],
     "paths": {
       "#tests": ["../tests"],
-      "#tests/*": ["../tests/*"],
-      "#orm/*": ["../src/orm/*"]
+      "#tests/*": ["../tests/*"]
     },
     "baseUrl": "./src/"
   },
   "include": ["src/**/*.ts"],
-  "files": ["src/index.ts"],
   "exclude": ["dist", "node_modules"],
   "filesGlob": ["src/**/*.ts", "tests/**/*.ts"],
   "types": ["node"],
