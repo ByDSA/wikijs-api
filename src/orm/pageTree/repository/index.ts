@@ -1,5 +1,6 @@
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-await-in-loop */
+import log from "npmlog";
 import { EntityRepository, getCustomRepository, Repository } from "typeorm";
 import { fetchDefaultLangFromSettings } from "../../global";
 import { PageRepository } from "../../page";
@@ -17,6 +18,47 @@ type CreateAndSaveOptions = {
 };
 @EntityRepository(PageTree)
 export default class PageTreeRepository extends Repository<PageTree> {
+  async updateReplacePathBeginning(
+    oldPathBeginning: string,
+    newPathBeginning: string,
+  ): Promise<PageTree[]> {
+    const query = this.createQueryBuilder()
+      .update(PageTree)
+      .set( {
+        path: () => `replace(path, '${oldPathBeginning}', '${newPathBeginning}')`,
+      } )
+      .where("path = :p1", {
+        p1: oldPathBeginning,
+      } )
+      .orWhere("path like :p2", {
+        p2: `${oldPathBeginning}/%`,
+      } )
+      .returning("*");
+    const result = await query.execute();
+    const rawResults = result.raw;
+    const ids = rawResults.map((r: any) => r.id);
+    const ret = await this.findByIds(ids);
+
+    if (log.level === "verbose") {
+      log.verbose("db PageTree", "Replaced path", `'${oldPathBeginning}%'`, `'${newPathBeginning}%'`);
+
+      for (const row of result.raw) {
+        const oldPath = row.path.replace(newPathBeginning, oldPathBeginning);
+
+        log.verbose("db PageTree", "Replaced path", oldPath, "=>", row.path);
+      }
+    }
+
+    for (const r of ret) {
+      if (r.isFolder && !r.pageId) {
+        r.title = r.path.split("/").slice(-1)[0];
+        await this.save(r);
+      }
+    }
+
+    return ret;
+  }
+
   async createAndSave(pageTree: PartialPageTreeWithPath, options?: CreateAndSaveOptions) {
     if (!pageTree.path)
       throw PATH_EXCEPTION;
@@ -29,7 +71,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
     entity.depth ??= splittedPath.length;
     entity.title ??= splittedPath.slice(-1)[0];
 
-    entity.isFolder = !(typeof pageTree.pageId === "number");
+    entity.isFolder ??= !(typeof pageTree.pageId === "number");
 
     entity.localeCode ??= await fetchDefaultLangFromSettings();
 
@@ -46,7 +88,11 @@ export default class PageTreeRepository extends Repository<PageTree> {
 
     entity.id ??= await this.generateId();
 
-    return this.save(entity);
+    const ret = await this.save(entity);
+
+    log.verbose("db PageTree", "Created", ret.path);
+
+    return ret;
   }
 
   private async getOrCreateParent(pageTree: Partial<PageTree>) {
@@ -112,6 +158,13 @@ export default class PageTreeRepository extends Repository<PageTree> {
       return deletedPageTrees;
 
     deletedPageTrees.push(pageTree);
+    deletedPageTrees.push(...await this.deleteSuperFoldersRecursivelyIfEmpty(pageTree));
+
+    return deletedPageTrees;
+  }
+
+  private async deleteSuperFoldersRecursivelyIfEmpty(pageTree: PageTree) {
+    const deletedPageTrees: PageTree[] = [];
     const reversedAncestorsIds = [...pageTree.ancestors].reverse();
 
     for (const ancestorId of reversedAncestorsIds) {
@@ -203,7 +256,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
       .getMany();
   }
 
-  private async insertOneAsFolder(
+  private async insertOneFolder(
     reference: PartialPageTreeWithPath,
     parent: PageTree | null,
   ): Promise<PageTree> {
@@ -231,10 +284,9 @@ export default class PageTreeRepository extends Repository<PageTree> {
     return last.id + 1;
   }
 
-  async insertFolder(path: string, reference?: Partial<PageTree>) {
+  async insertNode(path: string, reference?: Partial<PageTree>) {
     const splittedPath = path.split("/");
     const depth = splittedPath.length;
-    const isFolder = true;
     let parent: PageTree | null = null;
     const ret: PageTree[] = [];
 
@@ -252,7 +304,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
       ...removeNoMetadata(reference),
       path,
       depth,
-      isFolder,
+      isFolder: reference?.isFolder ?? false,
     };
 
     pageTree.id = await this.generateId();
@@ -263,6 +315,13 @@ export default class PageTreeRepository extends Repository<PageTree> {
     ret.push(savedPageTree);
 
     return ret;
+  }
+
+  insertFolder(path: string, reference?: Partial<PageTree>) {
+    return this.insertNode(path, {
+      ...reference,
+      isFolder: true,
+    } );
   }
 
   private async insertSuperFoldersIfNotExist(path: string, reference?: Partial<PageTree>) {
@@ -281,7 +340,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
           isFolder: true,
         };
 
-        folder = await this.insertOneAsFolder(newPageTree, parentFolder);
+        folder = await this.insertOneFolder(newPageTree, parentFolder);
 
         if (folder)
           created = true;

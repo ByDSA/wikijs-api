@@ -1,9 +1,11 @@
 import chalk from "chalk";
+import log from "npmlog";
 import yargs from "yargs";
 import defaultCmd from "./default";
-import movePagesCmd from "./move-pages";
+import movePagesCmd from "./move";
 
 async function processParams() {
+  log.level = "info";
   await defaultCmd();
   await movePagesCmd();
 
@@ -11,5 +13,5 @@ async function processParams() {
 }
 
 processParams().then(() => {
-  console.log(chalk.green("Done!"));
+  log.info("", chalk.green("Done!"));
 } );

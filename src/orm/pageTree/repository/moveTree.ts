@@ -1,14 +1,21 @@
-import { getParentPath } from "orm/utils";
+/* eslint-disable no-param-reassign */
+import log from "npmlog";
 import { getCustomRepository } from "typeorm";
 // eslint-disable-next-line import/no-cycle
 import PageTreeRepository from ".";
+import { getParentPath } from "../../utils";
 import PageTree from "../PageTree.entity";
+
+export type MoveTreeReturnType = {
+  createdFolders: PageTree[];
+  movedPages: PageTree[];
+};
 
 export default async function moveTree(
   repo: PageTreeRepository,
   oldPath: string,
   newPath: string,
-): Promise<PageTree[]> {
+): Promise<MoveTreeReturnType> {
   if (oldPath === newPath)
     throw new Error("Old path and new path are the same");
 
@@ -26,28 +33,37 @@ export default async function moveTree(
     return caseNewPathNotFound(oldPageTree, newPath);
 
   const foldersToDelete: number[] = [];
-
-  await moveOldNodeIfRequired(oldPageTree, foldersToDelete, newPageTree);
-
-  const ret: PageTree[] = [];
-  const promises: Promise<PageTree[]>[] = await moveOldSubFolders(
+  const moveOneRet = await moveOldNodeIfRequired(oldPageTree, foldersToDelete, newPageTree);
+  const promises: Promise<MoveTreeReturnType>[] = await moveOldSubFolders(
     repo,
     oldPageTree,
     newPageTree,
     oldPath,
   );
   const resolvedPromises = await Promise.all(promises);
+  const ret: MoveTreeReturnType = resolvedPromises.reduce(
+    (acc, cur) => {
+      acc.createdFolders.push(...cur.createdFolders);
+      acc.movedPages.push(...cur.movedPages);
 
-  ret.push(...resolvedPromises.flat());
+      return acc;
+    },
+  {
+    createdFolders: [],
+    movedPages: [],
+  } as MoveTreeReturnType,
+  );
 
-  /// ///
-  await deleteEmptyFolderAndSuperfolders(repo, oldPageTree.path);
+  if (moveOneRet.pageTree)
+    ret.movedPages.push(moveOneRet.pageTree);
+
+  await deleteEmptyFolderAndSuperfolders(oldPageTree.path);
 
   return ret;
 }
 
 type MoveOneReturnType = {
-  page: PageTree | undefined;
+  pageTree: PageTree | undefined;
   createdFolders: PageTree[];
 };
 
@@ -56,13 +72,13 @@ async function moveOldNodeIfRequired(
   foldersToDelete: number[],
   newBaseTree: PageTree,
 ): Promise<MoveOneReturnType> {
-  const isOnlyFolder = oldBaseTree.pageId === null && oldBaseTree.isFolder;
+  const oldIsOnlyFolder = oldBaseTree.pageId === null && oldBaseTree.isFolder;
 
-  if (isOnlyFolder) {
+  if (oldIsOnlyFolder) {
     foldersToDelete.push(oldBaseTree.id);
 
     return {
-      page: undefined,
+      pageTree: undefined,
       createdFolders: [],
     };
   }
@@ -77,34 +93,65 @@ async function moveOne(
   newPath: string,
 ): Promise<MoveOneReturnType> {
   const repo = getCustomRepository(PageTreeRepository);
-  const oldParentPath = getParentPath(oldPageTree.path);
-  const oldParent: PageTree | undefined = await repo.findByPath(oldParentPath);
-
-  if (!oldParent)
-    throw new Error(`Parent of old base path "${oldPageTree.path}" not found`);
-
   const newParentPath = getParentPath(newPath);
-  let newParent: PageTree | undefined = await repo.findByPath(newParentPath);
+  let newParent: PageTree | null = newParentPath
+    ? await repo.findByPath(newParentPath) ?? null
+    : null;
   let createdFolders: PageTree[] = [];
 
-  if (!newParent) {
+  if (!newParent && newParentPath) {
     createdFolders = await repo.insertFolder(newParentPath, oldPageTree);
 
     [newParent] = createdFolders.slice(-1);
   }
 
-  const page = {
+  const pageTree = {
     ...oldPageTree,
+    path: newPath,
   };
 
-  // TODO: cambiar parent y ascensors
-  sasasas;
+  fixParentAndAncestorsAndDepth(pageTree, newParent);
+
+  if (newParent)
+    setAsFolderIfIsNot(newParent);
+
+  await repo.save(pageTree);
+
+  log.verbose("db PageTree", "Moved", oldPageTree.path, "=>", newPath);
+
   const ret: MoveOneReturnType = {
-    page,
+    pageTree,
     createdFolders,
   };
 
   return ret;
+}
+
+async function setAsFolderIfIsNot(parent: PageTree): Promise<PageTree> {
+  if (!parent.isFolder) {
+    parent.isFolder = true;
+
+    // eslint-disable-next-line no-return-await
+    return await getCustomRepository(PageTreeRepository).save(parent);
+  }
+
+  return parent;
+}
+
+function fixParentAndAncestorsAndDepth(pageTree: PageTree, newParent: PageTree | null): PageTree {
+  if (!newParent) {
+    pageTree.parentId = null;
+    pageTree.ancestors = [];
+    pageTree.depth = 1;
+
+    return pageTree;
+  }
+
+  pageTree.parentId = newParent.id;
+  pageTree.ancestors = [...newParent.ancestors, newParent.id];
+  pageTree.depth = newParent.depth + 1;
+
+  return pageTree;
 }
 
 async function moveOldSubFolders(
@@ -114,7 +161,7 @@ async function moveOldSubFolders(
   oldPath: string,
 ) {
   const oldSubPageTrees: PageTree[] = await repo.findByParentId(oldBaseTree.id);
-  const promises: Promise<PageTree[]>[] = [];
+  const promises: Promise<MoveTreeReturnType>[] = [];
 
   for (const oldSubPageTree of oldSubPageTrees) {
     const candidateNewPath = newBaseTree.path + oldSubPageTree.path.slice(oldPath.length);
@@ -149,56 +196,70 @@ async function fetchIsAvailablePath(path: string): Promise<boolean> {
 }
 
 async function caseNewPathNotFound(
-  repo: PageTreeRepository,
   oldBaseTree: PageTree,
   newPath: string,
-) {
+): Promise<MoveTreeReturnType> {
+  const repo = getCustomRepository(PageTreeRepository);
   // Actualizar path por simple reemplazo
+  const pageTrees = await repo.updateReplacePathBeginning(oldBaseTree.path, newPath);
+  const newBaseTreeIndex: number = pageTrees.findIndex((pt) => pt.id === oldBaseTree.id);
 
+  if (newBaseTreeIndex === -1)
+    throw new Error(`Base node with id ${oldBaseTree.id} not found in updated paths of pageTrees.`);
+
+  const newBaseTree: PageTree = pageTrees.slice(newBaseTreeIndex, newBaseTreeIndex + 1)[0];
+  const subPageTrees = [
+    ...pageTrees.slice(0, newBaseTreeIndex),
+    ...pageTrees.slice(newBaseTreeIndex + 1),
+  ];
   // Crear superfolders (NO la actual)
+  let parentFolder: PageTree | null = null;
+  const parentPath = getParentPath(newPath);
+  const ret: MoveTreeReturnType = {
+    movedPages: [],
+    createdFolders: [],
+  };
 
-  // Actualizar parent a la última superfolder creada
+  if (parentPath) {
+    parentFolder = await repo.findByPath(parentPath) ?? null;
 
-  // Actualizar ancestors
+    if (!parentFolder) {
+      ret.createdFolders = await repo.insertFolder(parentPath, newBaseTree);
 
-  // return todas las pageTree cambiadas
+      const [lastCreatedFolder] = ret.createdFolders.slice(-1);
 
-  /// ////////////////
-  const splittedNewPath = newPath.split("/");
-  const newPathDepth = splittedNewPath.length;
-
-  if (!newBaseTree && newPathDepth > 1) {
-    if (oldBaseTree.isFolder) {
-      const insertedFolders = await repo.insertFolder(newPath);
-
-      [newBaseTree] = insertedFolders.slice(-1);
-    } else {
-      const newBaseTreeParentPath = splittedNewPath.slice(0, -1)
-        .join("/");
-      const newBaseTreeParent: PageTree | undefined = await repo.findByPath(newBaseTreeParentPath);
-
-      if (!newBaseTreeParent) {
-        const insertedFolders = await repo.insertFolder(newBaseTreeParentPath, oldBaseTree);
-
-        [newBaseTree] = insertedFolders.slice(-1);
-      }
-    }
+      parentFolder = lastCreatedFolder;
+    } else
+      setAsFolderIfIsNot(parentFolder);
   }
 
-  const pageTreesToChange = await updateReplaceAllPathBeginning(repo, oldPath, newPath);
-  const ret = await replaceAntecesorsParentAndDepth(
-    repo,
-    pageTreesToChange,
-    oldPath,
-    oldBaseTree,
-    newBaseTree,
-  );
+  // Actualizar parent a la última superfolder creada y ancestors
+  fixParentAndAncestorsAndDepth(newBaseTree, parentFolder);
+
+  rebuildAncestorsAndDepth(newBaseTree, subPageTrees);
+
+  // Guardar cambios
+  const savedPages = await repo.save(pageTrees);
+
+  ret.movedPages = savedPages;
+
+  return ret;
 }
 
-export async function deleteEmptyFolderAndSuperfolders(
-  repo: PageTreeRepository,
-  pageTreePath: string,
-) {
+function rebuildAncestorsAndDepth(baseTree: PageTree, pageTrees: PageTree[]): PageTree[] {
+  for (const pageTree of pageTrees) {
+    const indexParent = pageTree.ancestors.findIndex((ancestorId) => ancestorId === baseTree.id);
+    const subTreeWithBase = pageTree.ancestors.slice(indexParent);
+
+    pageTree.ancestors = [...baseTree.ancestors, ...subTreeWithBase];
+    pageTree.depth = pageTree.ancestors.length + 1;
+  }
+
+  return pageTrees;
+}
+
+export async function deleteEmptyFolderAndSuperfolders(pageTreePath: string) {
+  const repo = getCustomRepository(PageTreeRepository);
   const pageTree = await repo.findByPath(pageTreePath);
 
   if (!pageTree)

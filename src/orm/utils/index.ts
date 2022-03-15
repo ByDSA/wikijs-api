@@ -20,3 +20,15 @@ export function getSuperpaths(path: string): string[] {
 
   return ret;
 }
+
+export function fixPath(path: string): string {
+  let ret = path;
+
+  while (ret.indexOf("//") !== -1)
+    ret = ret.replace(/\/\//g, "/");
+
+  if (ret.at(-1) === "/")
+    ret = ret.slice(0, -1);
+
+  return ret;
+}

@@ -1,3 +1,4 @@
+import log from "npmlog";
 import { Connection, getCustomRepository } from "typeorm";
 import { Page, PageRepository } from "../page";
 import { PageTree, PageTreeRepository } from "../pageTree";
@@ -43,10 +44,11 @@ class Process {
     this.pagesRepo = getCustomRepository(PageRepository);
     this.pageTreesRepo = getCustomRepository(PageTreeRepository);
 
+    log.verbose("Move", "Trying to move recusively", this.oldPath, "to", this.newPath, "...");
+    log.verbose("db PageTree", "Trying to move recusively...");
     this.movedPageTrees = await this.movePageTreesRecursively();
+    log.verbose("db Page", "Trying to move recusively...");
     this.movedPages = await this.movePagesRecursively();
-
-    // await this.manageOldRootPageAndOldRootPageTree();
 
     return {
       pages: this.movedPages,
@@ -54,11 +56,13 @@ class Process {
     };
   }
 
-  movePageTreesRecursively() {
-    return this.pageTreesRepo.moveTree(this.oldPath, this.newPath);
+  private async movePageTreesRecursively() {
+    const moveTreeRet = await this.pageTreesRepo.moveTree(this.oldPath, this.newPath);
+
+    return moveTreeRet.movedPages;
   }
 
-  async movePagesRecursively() {
+  private async movePagesRecursively() {
     const pageIdsToMove = this.movedPageTrees.reduce((acc, pageTree) => {
       const { pageId } = pageTree;
 
@@ -82,61 +86,5 @@ class Process {
     } );
 
     return Promise.all(movedPages);
-  }
-
-  async saveOldRootPageTree() {
-    await this.pageTreesRepo.save(this.oldRootPageTree as PageTree);
-    this.movedPageTrees.unshift(this.oldRootPageTree as PageTree);
-  }
-
-  async saveOldRootPage() {
-    await this.pagesRepo.save(this.oldRootPage);
-    this.movedPages.unshift(this.oldRootPage as Page);
-  }
-
-  removeOldRootPageTree() {
-    return this.pageTreesRepo.remove(this.oldRootPageTree as PageTree);
-  }
-
-  oldRootPageTreeHasPage() {
-    return (this.oldRootPageTree as PageTree).pageId !== null;
-  }
-
-  // private async manageOldRootPageAndOldRootPageTree() {
-  //   this.oldRootPageTree = await this.pageTreesRepo.findByPath(this.oldPath);
-
-  //   if (this.oldRootPageTree) {
-  //     if (this.oldRootPageTreeHasPage()) {
-  //       this.oldRootPage = await this.fetchRootPage();
-
-  //       this.oldRootPage.path = this.oldRootPageTree.path;
-
-  //       this.changePathAndRenameOldRootPageTree();
-  //       await this.saveOldRootPageTree();
-
-  //       this.changePathAndRenameOldRootPage();
-  //       await this.saveOldRootPage();
-  //     } else
-  //       await this.removeOldRootPageTree();
-  //   }
-  // }
-
-  changePathAndRenameOldRootPageTree() {
-    const pageTree = this.oldRootPageTree as PageTree;
-
-    pageTree.path = `${this.oldRootPageTree?.path}_(2)`;
-    pageTree.title = `${this.oldRootPageTree?.title} (2)`;
-  }
-
-  fetchRootPage() {
-    return this.pagesRepo.findOne(this.oldRootPageTree?.pageId as number) as Promise<Page>;
-  }
-
-  changePathAndRenameOldRootPage() {
-    const page = this.oldRootPage as Page;
-    const pageTree = this.oldRootPageTree as PageTree;
-
-    page.path = pageTree.path;
-    page.title = pageTree.title;
   }
 }

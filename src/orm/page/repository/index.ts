@@ -1,4 +1,5 @@
 /* eslint-disable no-param-reassign */
+import log from "npmlog";
 import { EntityRepository, Repository } from "typeorm";
 import Page from "../Page.entity";
 import { fillWithDefaultValues } from "../utils";
@@ -14,6 +15,8 @@ export default class PageRepository extends Repository<Page> {
       } )
       .returning("*")
       .execute();
+
+    log.verbose("db", `Deleted Page: ${path}`);
 
     return result.raw[0] as Page;
   }
@@ -42,8 +45,8 @@ export default class PageRepository extends Repository<Page> {
       .getMany();
   }
 
-  updateReplaceInContent(oldString: string, newString: string) {
-    return this.createQueryBuilder()
+  async updateReplaceInContent(oldString: string, newString: string) {
+    const result = await this.createQueryBuilder()
       .update(Page)
       .set( {
         content: () => `replace(content, '${oldString}', '${newString}')`,
@@ -52,6 +55,13 @@ export default class PageRepository extends Repository<Page> {
         content: `%${oldString}%`,
       } )
       .execute();
+
+    log.verbose("db Page", "replace content", "old:", oldString, "new:", newString);
+
+    for (const r of result.raw)
+      log.verbose("db Page", "replaced content", "in", r.path);
+
+    return result;
   }
 
   async updateReplacePathBeginning(
@@ -63,10 +73,18 @@ export default class PageRepository extends Repository<Page> {
       .set( {
         path: () => `replace(path, '${oldPathBeginning}', '${newPathBeginning}')`,
       } )
-      .where("path like :path", {
-        path: `${oldPathBeginning}%`,
+      .where("path = :path", {
+        path: oldPathBeginning,
+      } )
+      .orWhere("path like :path", {
+        path: `${oldPathBeginning}/%`,
       } )
       .execute();
+
+    log.verbose("db Page", "replace path", "old:", oldPathBeginning, "new:", newPathBeginning);
+
+    for (const r of result.raw)
+      log.verbose("db Page", "replace path", "new full path: ", r.path);
 
     return result.raw;
   }
@@ -78,6 +96,8 @@ export default class PageRepository extends Repository<Page> {
     const newEntity = await fillWithDefaultValues( {
       ...page,
     } );
+
+    log.verbose("db", `Created new Page: ${page.path}`);
 
     return this.save(newEntity);
   }
