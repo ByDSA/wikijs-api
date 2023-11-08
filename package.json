@@ -11,12 +11,8 @@
     "prebuild": "npm run build:clean && npm rebuild",
     "start": "node ./dist/index.js",
     "build": "npm run build:clean && npm run build:raw",
-    "buildAndInstall": "npm run build && npm run build:install",
     "build:raw": "tsc -p tsconfig-build.json",
     "build:clean": "rm -rf dist",
-    "build:install": "sudo zx ./scripts/install.mjs",
-    "prepublishOnly": "npm run lint:fix && npm run build",
-    "postpublish": "npm run build:clean",
     "lint:eslint": "eslint ./src/*.ts",
     "lint:fix": "eslint ./src/*.ts --fix"
   },

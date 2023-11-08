@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import chalk from "chalk";
 import log from "npmlog";
 import yargs from "yargs";
