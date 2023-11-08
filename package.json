@@ -1,6 +1,6 @@
 {
   "name": "wikijs-api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A wikijs API",
   "author": "Daniel Sales Álvarez <danisales.es@gmail.com>",
   "license": "ISC",
@@ -25,10 +25,11 @@
     "yargs": "17.7.2"
   },
   "devDependencies": {
-    "@types/yargs": "17.0.31",
+    "@types/node": "20.9.0",
     "@types/jest": "27.5.2",
     "@types/npmlog": "4.1.6",
     "@types/pg": "8.10.9",
+    "@types/yargs": "17.0.31",
     "@typescript-eslint/eslint-plugin": "5.62.0",
     "@typescript-eslint/parser": "5.62.0",
     "eslint": "8.53.0",

@@ -100,7 +100,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
     const path = pageTree.path as string;
 
     if (pageTree.parentId)
-      return await this.findOne(pageTree.parentId) ?? null;
+      return await this.findOne({where: {id: pageTree.parentId}}) ?? null;
 
     const parentPath = getParentPath(path);
 
@@ -173,7 +173,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
       if (pageTreeWithParent.length > 1)
         return deletedPageTrees;
 
-      const folder = await this.findOne(ancestorId);
+      const folder = await this.findOne({where:{id:ancestorId}});
 
       if (!folder || !folder.isFolder || folder.pageId !== null)
         return deletedPageTrees;

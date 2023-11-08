@@ -22,12 +22,12 @@ export default async function moveTree(
   if (newPath.startsWith(oldPath) && (newPath.length === oldPath.length || newPath[oldPath.length] === "/"))
     throw new Error("New path is inside old path");
 
-  const oldPageTree: PageTree | undefined = await repo.findByPath(oldPath);
+  const oldPageTree: PageTree | null = await repo.findByPath(oldPath);
 
   if (!oldPageTree)
     throw new Error(`Old base path "${oldPath}" not found`);
 
-  const newPageTree: PageTree | undefined = await repo.findByPath(newPath);
+  const newPageTree: PageTree | null = await repo.findByPath(newPath);
 
   if (!newPageTree)
     return caseNewPathNotFound(oldPageTree, newPath);
@@ -191,7 +191,9 @@ async function fetchValidPath(initialNewPath: string): Promise<string> {
 
 async function fetchIsAvailablePath(path: string): Promise<boolean> {
   return (await getCustomRepository(PageTreeRepository).findOne( {
-    path,
+    where: {
+      path,
+    },
   } )) === undefined;
 }
 

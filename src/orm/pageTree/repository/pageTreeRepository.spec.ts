@@ -706,7 +706,9 @@ describe("update", () => {
 
           it("nodeTo is folder now", async () => {
             [nodeTo] = await repo.find( {
-              id: nodeTo.id,
+              where: {
+                id: nodeTo.id,
+              },
             } );
             expect(nodeTo.isFolder).toBeTruthy();
           } );
