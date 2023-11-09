@@ -1,17 +1,17 @@
 module.exports = {
   moduleDirectories: ["node_modules", "src"],
-  roots: ["<rootDir>/src", "<rootDir>/tests"],
+  roots: ["<rootDir>/src"],
   transform: {
-    "^.+\\.tsx?$": "ts-jest",
+    "^.+\\.tsx?$": [
+      "ts-jest",
+      {
+        isolatedModules: false,
+      },
+    ],
     "^.+\\.jsx?$": require.resolve("babel-jest"),
   },
   testRegex: "(/__tests__/.*|(\\.|/)(test|spec))\\.tsx?$",
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
-  globals: {
-    "ts-jest": {
-      isolatedModules: false,
-    },
-  },
   coverageThreshold: {
     global: {
       branches: 100,
@@ -23,5 +23,5 @@ module.exports = {
   moduleNameMapper: {
     "^#tests($|/.*)$": "<rootDir>/tests/$1",
   },
-  testTimeout: 9999 * 1000,
+  testTimeout: 10 * 1000,
 };

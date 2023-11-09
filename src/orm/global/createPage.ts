@@ -1,4 +1,3 @@
-import { getCustomRepository } from "typeorm";
 import { Page, PageRepository } from "../page";
 import { PageTree, PageTreeRepository } from "../pageTree";
 import { getParentPath } from "../utils";
@@ -16,8 +15,8 @@ type Options = {
   title?: string;
 };
 export default async function createPage(options: Options): Promise<ReturnType> {
-  const pageRepo = getCustomRepository(PageRepository);
-  const pageTreeRepo = getCustomRepository(PageTreeRepository);
+  const pageRepo = await PageRepository;
+  const pageTreeRepo = await PageTreeRepository;
   const pageEntity = await pageRepo.createAndSave(options);
   const parentFolder = await pageTreeRepo.findByPath(getParentPath(options.path));
   const lastFolderAncestors = parentFolder?.ancestors;

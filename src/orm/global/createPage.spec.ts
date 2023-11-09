@@ -1,17 +1,17 @@
-import testConnection from "#tests/Connection";
+import c from "orm/connection/Connection";
 import { Page, PageRepository } from "orm/page";
 import { PageTree, PageTreeRepository } from "orm/pageTree";
 import { Connection } from "typeorm";
 import createPage, { ReturnType } from "./createPage";
 
 let connection: Connection;
-let pageRepo: PageRepository;
-let pageTreeRepo: PageTreeRepository;
+let pageRepo: Awaited<typeof PageRepository>;
+let pageTreeRepo: Awaited<typeof PageTreeRepository>;
 
 beforeAll(async () => {
-  connection = await testConnection;
-  pageRepo = connection.getCustomRepository(PageRepository);
-  pageTreeRepo = connection.getCustomRepository(PageTreeRepository);
+  connection = await c;
+  pageRepo = await PageRepository;
+  pageTreeRepo = await PageTreeRepository;
 } );
 
 afterAll(() => {

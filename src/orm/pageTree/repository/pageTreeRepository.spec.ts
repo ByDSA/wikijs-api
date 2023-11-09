@@ -1,5 +1,5 @@
 /* eslint-disable prefer-destructuring */
-import connection from "#tests/Connection";
+import c from "orm/connection/Connection";
 import { getSuperpaths } from "orm/utils";
 import { PATH_EXCEPTION } from "orm/utils/exceptions";
 import { Connection } from "typeorm";
@@ -7,7 +7,7 @@ import Repository from ".";
 import PageTree from "../PageTree.entity";
 import { deleteEmptyFolderAndSuperfolders, MoveTreeReturnType, updateReplaceAllPathBeginning } from "./moveTree";
 
-let repo: Repository;
+let repo: Awaited<typeof Repository>;
 let con: Connection;
 const nonExistingFolderPath = "nonExistingFolder";
 const nonExistingFolderFullPath = "nonExistingFolder/2/3/4";
@@ -15,8 +15,8 @@ const nonExistingFolderFrom = "nonExistingFolderFrom";
 const nonExistingFolderTo = "nonExistingFolderTo";
 
 beforeAll(async () => {
-  con = await connection;
-  repo = con.getCustomRepository(Repository);
+  con = await c;
+  repo = await Repository;
 } );
 
 afterAll(() => {
@@ -67,7 +67,7 @@ describe("private", () => {
   let repoAny: RepoPrivate;
 
   beforeAll(() => {
-    repoAny = (repo as any as RepoPrivate);
+    repoAny = (repo as unknown as RepoPrivate);
   } );
   describe("removeFoldersRecursivelyIfEmpty", () => {
     it("test", async () => {
@@ -210,7 +210,7 @@ describe("private", () => {
       it("old path doesn't exist anymore", async () => {
         const oldPageTree = await repo.findByPath(oldPath);
 
-        expect(oldPageTree).toBeUndefined();
+        expect(oldPageTree).toBeNull();
       } );
       it("new path exists", async () => {
         const newPageTree = await repo.findByPath(newPath);
@@ -245,13 +245,13 @@ describe("private", () => {
         it("3", async () => {
           const oldPageTree = await repo.findByPath(`${oldPath}/3`);
 
-          expect(oldPageTree).toBeUndefined();
+          expect(oldPageTree).toBeNull();
         } );
 
         it("4", async () => {
           const oldPageTree = await repo.findByPath(`${oldPath}/3/4`);
 
-          expect(oldPageTree).toBeUndefined();
+          expect(oldPageTree).toBeNull();
         } );
       } );
 
@@ -309,7 +309,7 @@ describe("find", () => {
     it("not found", async () => {
       const actual = await repo.findByPath(`${nonExistingFolderPath}dasdasd`);
 
-      expect(actual).toBeUndefined();
+      expect(actual).toBeNull();
     } );
   } );
 } );
@@ -446,7 +446,7 @@ describe("update", () => {
         it("deleted from", async () => {
           const fromPageTree = await repo.findByPath(from);
 
-          expect(fromPageTree).toBeUndefined();
+          expect(fromPageTree).toBeNull();
         } );
       } );
 

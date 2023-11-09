@@ -1,13 +1,13 @@
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-await-in-loop */
 import log from "npmlog";
-import { EntityRepository, getCustomRepository, Repository } from "typeorm";
+import connection from "orm/connection/Connection";
 import { fetchDefaultLangFromSettings } from "../../global";
 import { PageRepository } from "../../page";
 import { getParentPath, getSuperpaths, PATH_EXCEPTION } from "../../utils";
 import PageTree from "../PageTree.entity";
 // eslint-disable-next-line import/no-cycle
-import moveTreeProcess from "./moveTree";
+import moveTreeProcess, { MoveTreeReturnType } from "./moveTree";
 
 type PartialPageTreeWithPath = Partial<PageTree> & {
   path: string;
@@ -16,8 +16,7 @@ type PartialPageTreeWithPath = Partial<PageTree> & {
 type CreateAndSaveOptions = {
   parent?: PageTree | null;
 };
-@EntityRepository(PageTree)
-export default class PageTreeRepository extends Repository<PageTree> {
+const PageTreeRepository = connection.then((c) => c.getRepository(PageTree).extend( {
   async updateReplacePathBeginning(
     oldPathBeginning: string,
     newPathBeginning: string,
@@ -57,7 +56,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
     }
 
     return ret;
-  }
+  },
 
   async createAndSave(pageTree: PartialPageTreeWithPath, options?: CreateAndSaveOptions) {
     if (!pageTree.path)
@@ -93,14 +92,20 @@ export default class PageTreeRepository extends Repository<PageTree> {
     log.verbose("db PageTree", "Created", ret.path);
 
     return ret;
-  }
+  },
 
-  private async getOrCreateParent(pageTree: Partial<PageTree>) {
+  // TODO: private
+  async getOrCreateParent(pageTree: Partial<PageTree>) {
     let parent: PageTree | null = null;
     const path = pageTree.path as string;
 
-    if (pageTree.parentId)
-      return await this.findOne({where: {id: pageTree.parentId}}) ?? null;
+    if (pageTree.parentId) {
+      return await this.findOne( {
+        where: {
+          id: pageTree.parentId,
+        },
+      } ) ?? null;
+    }
 
     const parentPath = getParentPath(path);
 
@@ -117,7 +122,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
     parent = folders.at(-1) ?? null;
 
     return parent;
-  }
+  },
 
   async existsSuperfoldersByPath(path: string) {
     const pathSplit = path.split("/");
@@ -135,7 +140,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
       .reduce((acc, n) => acc && !!n, true);
 
     return exists;
-  }
+  },
 
   async deleteOneByPath(path: string) {
     const result = await this.createQueryBuilder()
@@ -148,7 +153,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
       .execute();
 
     return result.raw[0];
-  }
+  },
 
   async deleteByPath(path: string): Promise<PageTree[]> {
     const pageTree = await this.deleteOneByPath(path);
@@ -161,9 +166,10 @@ export default class PageTreeRepository extends Repository<PageTree> {
     deletedPageTrees.push(...await this.deleteSuperFoldersRecursivelyIfEmpty(pageTree));
 
     return deletedPageTrees;
-  }
+  },
 
-  private async deleteSuperFoldersRecursivelyIfEmpty(pageTree: PageTree) {
+  // TODO: private
+  async deleteSuperFoldersRecursivelyIfEmpty(pageTree: PageTree) {
     const deletedPageTrees: PageTree[] = [];
     const reversedAncestorsIds = [...pageTree.ancestors].reverse();
 
@@ -173,7 +179,11 @@ export default class PageTreeRepository extends Repository<PageTree> {
       if (pageTreeWithParent.length > 1)
         return deletedPageTrees;
 
-      const folder = await this.findOne({where:{id:ancestorId}});
+      const folder = await this.findOne( {
+        where: {
+          id: ancestorId,
+        },
+      } );
 
       if (!folder || !folder.isFolder || folder.pageId !== null)
         return deletedPageTrees;
@@ -184,18 +194,18 @@ export default class PageTreeRepository extends Repository<PageTree> {
     }
 
     return deletedPageTrees;
-  }
+  },
 
-  moveTree(oldPath: string, newPath: string) {
-    return moveTreeProcess(this, oldPath, newPath);
-  }
+  async moveTree(oldPath: string, newPath: string): Promise<MoveTreeReturnType> {
+    return moveTreeProcess(await PageTreeRepository, oldPath, newPath);
+  },
 
   async fixAll() {
     await this.fixAllPagesHaveToBePageTree();
-  }
+  },
 
   async fixAllPagesHaveToBePageTree() {
-    const pageRepo = getCustomRepository(PageRepository);
+    const pageRepo = await PageRepository;
     let allPages = await pageRepo.find();
     const allPageTrees = await this.find();
 
@@ -222,7 +232,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
     }
 
     return createdPageTrees;
-  }
+  },
 
   findByPath(path: string) {
     return this.createQueryBuilder("pageTree")
@@ -230,7 +240,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
         path,
       } )
       .getOne();
-  }
+  },
 
   findByPageId(pageId: number) {
     return this.createQueryBuilder("pageTree")
@@ -238,7 +248,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
         pageId,
       } )
       .getOne();
-  }
+  },
 
   findByPathBeginning(pathBeginning: string) {
     return this.createQueryBuilder("pageTree")
@@ -246,7 +256,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
         pathBeginning: `${pathBeginning}%`,
       } )
       .getMany();
-  }
+  },
 
   findByParentId(parentId: number) {
     return this.createQueryBuilder("pageTree")
@@ -254,9 +264,10 @@ export default class PageTreeRepository extends Repository<PageTree> {
         parent: parentId,
       } )
       .getMany();
-  }
+  },
 
-  private async insertOneFolder(
+  // TODO: private
+  async insertOneFolder(
     reference: PartialPageTreeWithPath,
     parent: PageTree | null,
   ): Promise<PageTree> {
@@ -269,10 +280,13 @@ export default class PageTreeRepository extends Repository<PageTree> {
     } );
 
     return ret;
-  }
+  },
 
-  private async generateId() {
+  // TODO: private
+  async generateId() {
     const last = await this.findOne( {
+      where: {
+      },
       order: {
         id: "DESC",
       },
@@ -282,7 +296,7 @@ export default class PageTreeRepository extends Repository<PageTree> {
       throw new Error("No pageTree found");
 
     return last.id + 1;
-  }
+  },
 
   async insertNode(path: string, reference?: Partial<PageTree>) {
     const splittedPath = path.split("/");
@@ -315,16 +329,17 @@ export default class PageTreeRepository extends Repository<PageTree> {
     ret.push(savedPageTree);
 
     return ret;
-  }
+  },
 
   insertFolder(path: string, reference?: Partial<PageTree>) {
     return this.insertNode(path, {
       ...reference,
       isFolder: true,
     } );
-  }
+  },
 
-  private async insertSuperFoldersIfNotExist(path: string, reference?: Partial<PageTree>) {
+  // TODO: private
+  async insertSuperFoldersIfNotExist(path: string, reference?: Partial<PageTree>) {
     const folders = [];
     const superPaths = getSuperpaths(path);
     let parentFolder: PageTree | null = null;
@@ -353,8 +368,10 @@ export default class PageTreeRepository extends Repository<PageTree> {
     }
 
     return folders;
-  }
-}
+  },
+} ));
+
+export default PageTreeRepository;
 
 function removeNoMetadata(pageTree: Partial<PageTree> | undefined) {
   if (!pageTree)

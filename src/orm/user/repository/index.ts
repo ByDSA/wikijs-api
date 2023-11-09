@@ -1,6 +1,6 @@
-import { EntityRepository, Repository } from "typeorm";
+import connection from "orm/connection/Connection";
 import User from "../User.entity";
 
-@EntityRepository(User)
-export default class PageRepository extends Repository<User> {
-}
+const UserRepository = connection.then((c) => c.getRepository(User));
+
+export default UserRepository;

@@ -1,7 +1,20 @@
 import { config } from "dotenv";
+import assert from "node:assert";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { createConnection } from "typeorm";
 
-config();
+if (process.env.NODE_ENV === "test") {
+  const p = join(__dirname, "..", "..", "..", "test.env");
+  const exists = existsSync(p);
+
+  assert(exists, `File ${p} doesn't exist`);
+  config( {
+    path: p,
+  } );
+} else
+  config();
+
 const DEFAULT_CONFIG = {
   host: "localhost",
   port: 5432,

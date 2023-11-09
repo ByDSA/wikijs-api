@@ -1,4 +1,4 @@
-import testConnection from "#tests/Connection";
+import c from "orm/connection/Connection";
 import { PageRepository } from "orm/page";
 import { PageTreeRepository } from "orm/pageTree";
 import { Connection } from "typeorm";
@@ -7,13 +7,13 @@ import deletePageByPath from "./deletePageByPath";
 import movePageRecursively, { ReturnType } from "./movePageRecursively";
 
 let connection: Connection;
-let pageRepo: PageRepository;
-let pageTreeRepo: PageTreeRepository;
+let pageRepo: Awaited<typeof PageRepository>;
+let pageTreeRepo: Awaited<typeof PageTreeRepository>;
 
 beforeAll(async () => {
-  connection = await testConnection;
-  pageRepo = connection.getCustomRepository(PageRepository);
-  pageTreeRepo = connection.getCustomRepository(PageTreeRepository);
+  connection = await c;
+  pageRepo = await PageRepository;
+  pageTreeRepo = await PageTreeRepository;
 } );
 
 afterAll(() => {

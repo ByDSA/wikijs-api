@@ -1,5 +1,5 @@
 import log from "npmlog";
-import { Connection, getCustomRepository } from "typeorm";
+import { Connection } from "typeorm";
 import { Page, PageRepository } from "../page";
 import { PageTree, PageTreeRepository } from "../pageTree";
 
@@ -27,9 +27,9 @@ class Process {
 
   movedPageTrees!: PageTree[];
 
-  pagesRepo!: PageRepository;
+  pagesRepo!: Awaited<typeof PageRepository>;
 
-  pageTreesRepo!: PageTreeRepository;
+  pageTreesRepo!: Awaited<typeof PageTreeRepository>;
 
   oldRootPageTree: PageTree | undefined;
 
@@ -41,8 +41,8 @@ class Process {
   }
 
   async doProcess() {
-    this.pagesRepo = getCustomRepository(PageRepository);
-    this.pageTreesRepo = getCustomRepository(PageTreeRepository);
+    this.pagesRepo = await PageRepository;
+    this.pageTreesRepo = await PageTreeRepository;
 
     log.verbose("Move", "Trying to move recusively", this.oldPath, "to", this.newPath, "...");
     log.verbose("db PageTree", "Trying to move recusively...");

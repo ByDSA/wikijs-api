@@ -1,6 +1,5 @@
 /* eslint-disable no-param-reassign */
 import log from "npmlog";
-import { getCustomRepository } from "typeorm";
 // eslint-disable-next-line import/no-cycle
 import PageTreeRepository from ".";
 import { getParentPath } from "../../utils";
@@ -12,7 +11,7 @@ export type MoveTreeReturnType = {
 };
 
 export default async function moveTree(
-  repo: PageTreeRepository,
+  repo: Awaited<typeof PageTreeRepository>,
   oldPath: string,
   newPath: string,
 ): Promise<MoveTreeReturnType> {
@@ -92,7 +91,7 @@ async function moveOne(
   oldPageTree: PageTree,
   newPath: string,
 ): Promise<MoveOneReturnType> {
-  const repo = getCustomRepository(PageTreeRepository);
+  const repo = await PageTreeRepository;
   const newParentPath = getParentPath(newPath);
   let newParent: PageTree | null = newParentPath
     ? await repo.findByPath(newParentPath) ?? null
@@ -113,7 +112,7 @@ async function moveOne(
   fixParentAndAncestorsAndDepth(pageTree, newParent);
 
   if (newParent)
-    setAsFolderIfIsNot(newParent);
+    await setAsFolderIfIsNot(newParent);
 
   await repo.save(pageTree);
 
@@ -131,8 +130,10 @@ async function setAsFolderIfIsNot(parent: PageTree): Promise<PageTree> {
   if (!parent.isFolder) {
     parent.isFolder = true;
 
-    // eslint-disable-next-line no-return-await
-    return await getCustomRepository(PageTreeRepository).save(parent);
+    const repo = await PageTreeRepository;
+    const ret = await repo.save(parent);
+
+    return ret;
   }
 
   return parent;
@@ -155,7 +156,7 @@ function fixParentAndAncestorsAndDepth(pageTree: PageTree, newParent: PageTree |
 }
 
 async function moveOldSubFolders(
-  repo: PageTreeRepository,
+  repo: Awaited<typeof PageTreeRepository>,
   oldBaseTree: PageTree,
   newBaseTree: PageTree,
   oldPath: string,
@@ -190,18 +191,21 @@ async function fetchValidPath(initialNewPath: string): Promise<string> {
 }
 
 async function fetchIsAvailablePath(path: string): Promise<boolean> {
-  return (await getCustomRepository(PageTreeRepository).findOne( {
+  const repo = await PageTreeRepository;
+  const found = await repo.findOne( {
     where: {
       path,
     },
-  } )) === undefined;
+  } );
+
+  return found === null;
 }
 
 async function caseNewPathNotFound(
   oldBaseTree: PageTree,
   newPath: string,
 ): Promise<MoveTreeReturnType> {
-  const repo = getCustomRepository(PageTreeRepository);
+  const repo = await PageTreeRepository;
   // Actualizar path por simple reemplazo
   const pageTrees = await repo.updateReplacePathBeginning(oldBaseTree.path, newPath);
   const newBaseTreeIndex: number = pageTrees.findIndex((pt) => pt.id === oldBaseTree.id);
@@ -232,7 +236,7 @@ async function caseNewPathNotFound(
 
       parentFolder = lastCreatedFolder;
     } else
-      setAsFolderIfIsNot(parentFolder);
+      await setAsFolderIfIsNot(parentFolder);
   }
 
   // Actualizar parent a la última superfolder creada y ancestors
@@ -261,7 +265,7 @@ function rebuildAncestorsAndDepth(baseTree: PageTree, pageTrees: PageTree[]): Pa
 }
 
 export async function deleteEmptyFolderAndSuperfolders(pageTreePath: string) {
-  const repo = getCustomRepository(PageTreeRepository);
+  const repo = await PageTreeRepository;
   const pageTree = await repo.findByPath(pageTreePath);
 
   if (!pageTree)
@@ -299,7 +303,7 @@ export async function deleteEmptyFolderAndSuperfolders(pageTreePath: string) {
 }
 
 export function replaceAntecesorsParentAndDepth(
-  repo: PageTreeRepository,
+  repo: Awaited<typeof PageTreeRepository>,
   pageTreesToChange: PageTree[],
   oldBasePath: string,
   oldBaseTree: PageTree,
@@ -327,7 +331,7 @@ export function replaceAntecesorsParentAndDepth(
 }
 
 export async function updateReplaceAllPathBeginning(
-  repo: PageTreeRepository,
+  repo: Awaited<typeof PageTreeRepository>,
   oldPathBeginning: string,
   newPathBeginning: string,
 ): Promise<PageTree[]> {
@@ -341,7 +345,7 @@ export async function updateReplaceAllPathBeginning(
 }
 
 export async function updateReplaceExactPath(
-  repo: PageTreeRepository,
+  repo: Awaited<typeof PageTreeRepository>,
   oldPath: string,
   newPath: string,
 ): Promise<PageTree | undefined> {
@@ -356,7 +360,7 @@ export async function updateReplaceExactPath(
 }
 
 export async function updateReplaceAllSubPath(
-  repo: PageTreeRepository,
+  repo: Awaited<typeof PageTreeRepository>,
   oldBasePath: string,
   newBasePath: string,
 ): Promise<PageTree[]> {

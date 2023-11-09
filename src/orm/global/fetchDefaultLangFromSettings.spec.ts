@@ -1,11 +1,11 @@
-import testConnection from "#tests/Connection";
+import c from "orm/connection/Connection";
 import { Connection } from "typeorm";
 import fetchDefaultLangFromSettings from "./fetchDefaultLangFromSettings";
 
 let connection: Connection;
 
 beforeAll(async () => {
-  connection = await testConnection;
+  connection = await c;
 } );
 
 afterAll(() => {

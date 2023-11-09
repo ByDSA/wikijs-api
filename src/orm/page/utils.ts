@@ -1,6 +1,5 @@
 /* eslint-disable no-param-reassign */
 import crypto from "crypto";
-import { getCustomRepository } from "typeorm";
 import { fetchDefaultLangFromSettings } from "../global";
 import { UserRepository } from "../user";
 import Page from "./Page.entity";
@@ -11,7 +10,7 @@ export async function fillWithDefaultValues(page: Partial<Page>) {
   page.isPublished ??= true;
 
   if (!page.author || !page.creator) {
-    const userRepo = getCustomRepository(UserRepository);
+    const userRepo = await UserRepository;
     const users = await userRepo.find( {
       order: {
         id: "ASC",

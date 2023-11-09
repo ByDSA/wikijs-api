@@ -1,11 +1,10 @@
 /* eslint-disable no-param-reassign */
 import log from "npmlog";
-import { EntityRepository, Repository } from "typeorm";
+import connection from "orm/connection/Connection";
 import Page from "../Page.entity";
 import { fillWithDefaultValues } from "../utils";
 
-@EntityRepository(Page)
-export default class PageRepository extends Repository<Page> {
+const PageRepository = connection.then((c) => c.getRepository(Page).extend( {
   async deleteByPath(path: string) {
     const result = await this.createQueryBuilder()
       .delete()
@@ -19,7 +18,7 @@ export default class PageRepository extends Repository<Page> {
     log.verbose("db", `Deleted Page: ${path}`);
 
     return result.raw[0] as Page;
-  }
+  },
 
   findByPathBeginning(pathBeginning: string) {
     return this.createQueryBuilder("page")
@@ -27,7 +26,7 @@ export default class PageRepository extends Repository<Page> {
         path: `${pathBeginning}%`,
       } )
       .getMany();
-  }
+  },
 
   findByIds(ids: number[]) {
     return this.createQueryBuilder()
@@ -35,7 +34,7 @@ export default class PageRepository extends Repository<Page> {
         ids,
       } )
       .getMany();
-  }
+  },
 
   findInContent(content: string) {
     return this.createQueryBuilder("page")
@@ -43,7 +42,7 @@ export default class PageRepository extends Repository<Page> {
         content: `%${content}%`,
       } )
       .getMany();
-  }
+  },
 
   async updateReplaceInContent(oldString: string, newString: string) {
     const result = await this.createQueryBuilder()
@@ -62,7 +61,7 @@ export default class PageRepository extends Repository<Page> {
       log.verbose("db Page", "replaced content", "in", r.path);
 
     return result;
-  }
+  },
 
   async updateReplacePathBeginning(
     oldPathBeginning: string,
@@ -87,7 +86,7 @@ export default class PageRepository extends Repository<Page> {
       log.verbose("db Page", "replace path", "new full path: ", r.path);
 
     return result.raw;
-  }
+  },
 
   async createAndSave(page: Partial<Page>) {
     if (!page.path)
@@ -100,5 +99,7 @@ export default class PageRepository extends Repository<Page> {
     log.verbose("db", `Created new Page: ${page.path}`);
 
     return this.save(newEntity);
-  }
-}
+  },
+} ));
+
+export default PageRepository;

@@ -1,13 +1,13 @@
-import connection from "#tests/Connection";
+import c from "orm/connection/Connection";
 import { Connection } from "typeorm";
 import PageRepository from ".";
 
-let repo: PageRepository;
+let repo: Awaited<typeof PageRepository>;
 let con: Connection;
 
 beforeAll(async () => {
-  con = await connection;
-  repo = con.getCustomRepository(PageRepository);
+  con = await c;
+  repo = await PageRepository;
 } );
 
 afterAll(() => {
