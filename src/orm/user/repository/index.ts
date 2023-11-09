@@ -1,4 +1,4 @@
-import connection from "orm/connection/Connection";
+import connection from "../../connection/Connection";
 import User from "../User.entity";
 
 const UserRepository = connection.then((c) => c.getRepository(User));

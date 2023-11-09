@@ -1,6 +1,6 @@
 /* eslint-disable no-param-reassign */
 import log from "npmlog";
-import connection from "orm/connection/Connection";
+import connection from "../../connection/Connection";
 import Page from "../Page.entity";
 import { fillWithDefaultValues } from "../utils";
 

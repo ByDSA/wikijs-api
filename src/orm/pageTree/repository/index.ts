@@ -1,7 +1,7 @@
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-await-in-loop */
 import log from "npmlog";
-import connection from "orm/connection/Connection";
+import connection from "../../connection/Connection";
 import { fetchDefaultLangFromSettings } from "../../global";
 import { PageRepository } from "../../page";
 import { getParentPath, getSuperpaths, PATH_EXCEPTION } from "../../utils";
